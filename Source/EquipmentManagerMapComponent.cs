@@ -386,13 +386,19 @@ namespace EquipmentManager
 
         private void UpdateMeleeSidearms()
         {
+            if (_pawnCache == null) { return; }
+
             foreach (var pawn in _pawnCache.Where(pc => pc.ShouldUpdateEquipment))
             {
+                if (pawn.AssignedLoadout?.MeleeSidearmRules == null) { continue; }
+
                 var sidearmMemory = CompSidearmMemory.GetMemoryCompForPawn(pawn.Pawn);
-                foreach (var rule in pawn.AssignedLoadout.MeleeSidearmRules.Select(EquipmentManager.GetMeleeWeaponRule)
-                             .Where(rule => rule != null))
+                if (sidearmMemory == null) { continue; }
+
+                foreach (var rule in pawn.AssignedLoadout.MeleeSidearmRules
+                             .Select(EquipmentManager.GetMeleeWeaponRule).Where(rule => rule != null))
                 {
-                    var availableWeapons = rule.GetCurrentlyAvailableItems(map, _updateTime).ToList();
+                    var availableWeapons = rule.GetCurrentlyAvailableItems(map, _updateTime)?.ToList() ?? new List<Thing>();
                     _ = availableWeapons.RemoveAll(thing =>
                         !StatCalculator.CanPickupSidearmInstance((ThingWithComps) thing, pawn.Pawn, out _));
                     var carriedWeapons = pawn.Pawn.GetCarriedWeapons(true, true)
@@ -402,8 +408,9 @@ namespace EquipmentManager
                         _pawnCache.Any(pc => pc.AssignedWeapons.ContainsKey(thing)));
                     _ = availableWeapons.RemoveAll(thing =>
                         !EquipmentUtility.CanEquip(thing, pawn.Pawn) ||
-                        (pawn.Pawn.playerSettings.EffectiveAreaRestrictionInPawnCurrentMap != null &&
-                            !pawn.Pawn.playerSettings.EffectiveAreaRestrictionInPawnCurrentMap[thing.Position]));
+                        (pawn.Pawn.playerSettings?.EffectiveAreaRestrictionInPawnCurrentMap != null &&
+                         !pawn.Pawn.playerSettings.EffectiveAreaRestrictionInPawnCurrentMap[thing.Position]));
+
                     switch (rule.EquipMode)
                     {
                         case ItemRule.WeaponEquipMode.BestOne:
@@ -430,12 +437,12 @@ namespace EquipmentManager
                                     requestQueueing: ShouldRequestQueueing(pawn));
                             }
                             break;
+
                         case ItemRule.WeaponEquipMode.AllAvailable:
                             foreach (var weapon in availableWeapons.Where(weapon =>
                                          pawn.AssignedWeapons.Keys.All(thing => thing.def != weapon.def) &&
                                          (carriedWeapons.Contains(weapon) ||
-                                             StatCalculator.CanPickupSidearmInstance((ThingWithComps) weapon, pawn.Pawn,
-                                                 out _))))
+                                          StatCalculator.CanPickupSidearmInstance((ThingWithComps) weapon, pawn.Pawn, out _))))
                             {
                                 pawn.AssignedWeapons.Add(weapon, "melee sidearm");
                                 if (carriedWeapons.Contains(weapon) &&
@@ -447,11 +454,12 @@ namespace EquipmentManager
                                 {
                                     _ = pawn.Pawn.jobs.TryTakeOrderedJob(
                                         JobMaker.MakeJob(SidearmsDefOf.EquipSecondary, (LocalTargetInfo) weapon),
-                                        requestQueueing: new[] {JobDefOf.Equip, SidearmsDefOf.EquipSecondary}.Contains(
+                                        requestQueueing: new[] { JobDefOf.Equip, SidearmsDefOf.EquipSecondary }.Contains(
                                             pawn.Pawn.CurJob?.def));
                                 }
                             }
                             break;
+
                         default:
                             throw new ArgumentOutOfRangeException();
                     }
@@ -487,8 +495,12 @@ namespace EquipmentManager
 
         private void UpdatePrimaryWeapons()
         {
+            if (_pawnCache == null) { return; }
+
             foreach (var pawn in _pawnCache.Where(pc => pc.ShouldUpdateEquipment))
             {
+                if (pawn.AssignedLoadout == null) { continue; }
+
                 switch (pawn.AssignedLoadout.PrimaryRuleType)
                 {
                     case Loadout.PrimaryWeaponType.None:
@@ -509,20 +521,26 @@ namespace EquipmentManager
         {
             foreach (var pawn in _pawnCache.Where(pc => pc.ShouldUpdateEquipment))
             {
+                if (pawn.AssignedLoadout?.RangedSidearmRules == null) { continue; }
+
                 foreach (var rule in pawn.AssignedLoadout.RangedSidearmRules
                              .Select(EquipmentManager.GetRangedWeaponRule).Where(rule => rule != null))
                 {
                     var sidearmMemory = CompSidearmMemory.GetMemoryCompForPawn(pawn.Pawn);
-                    var availableWeapons = rule.GetCurrentlyAvailableItems(map, _updateTime).ToList();
+                    if (sidearmMemory == null) { continue; }
+
+                    var availableWeapons = rule.GetCurrentlyAvailableItems(map, _updateTime)?.ToList() ?? new List<Thing>();
                     var carriedWeapons = pawn.Pawn.GetCarriedWeapons(true, true)
                         .Where(weapon => rule.IsAvailable(weapon, _updateTime)).ToList();
+
                     availableWeapons.AddRange(carriedWeapons);
                     _ = availableWeapons.RemoveAll(thing =>
                         _pawnCache.Any(pc => pc != pawn && pc.AssignedWeapons.ContainsKey(thing)));
                     _ = availableWeapons.RemoveAll(thing =>
                         !EquipmentUtility.CanEquip(thing, pawn.Pawn) ||
-                        (pawn.Pawn.playerSettings.EffectiveAreaRestrictionInPawnCurrentMap != null &&
-                            !pawn.Pawn.playerSettings.EffectiveAreaRestrictionInPawnCurrentMap[thing.Position]));
+                        (pawn.Pawn.playerSettings?.EffectiveAreaRestrictionInPawnCurrentMap != null &&
+                         !pawn.Pawn.playerSettings.EffectiveAreaRestrictionInPawnCurrentMap[thing.Position]));
+
                     switch (rule.EquipMode)
                     {
                         case ItemRule.WeaponEquipMode.BestOne:
@@ -534,8 +552,10 @@ namespace EquipmentManager
                                     sidearmMemory.RememberedWeapons.Contains(thing.toThingDefStuffDefPair()))
                                 .ThenByDescending(thing => carriedWeapons.Contains(thing))
                                 .ThenBy(thing => thing.GetHashCode()).FirstOrDefault();
+
                             if (bestWeapon == null ||
                                 pawn.AssignedWeapons.Keys.Any(thing => thing.def == bestWeapon.def)) { continue; }
+
                             pawn.AssignedWeapons.Add(bestWeapon, "ranged sidearm");
                             if (carriedWeapons.Contains(bestWeapon) &&
                                 !sidearmMemory.RememberedWeapons.Contains(bestWeapon.toThingDefStuffDefPair()))
@@ -550,13 +570,13 @@ namespace EquipmentManager
                             }
                             UpdateAmmo(pawn, bestWeapon, rule);
                             break;
+
                         case ItemRule.WeaponEquipMode.AllAvailable:
                             foreach (var weapon in availableWeapons.Where(weapon =>
                                          pawn.AssignedWeapons.Keys.All(thing => thing.def != weapon.def) &&
                                          (carriedWeapons.Contains(weapon) ||
-                                             StatCalculator.CanPickupSidearmInstance((ThingWithComps) weapon, pawn.Pawn,
-                                                 out _))).OrderByDescending(thing =>
-                                         rule.GetThingScore(thing, _updateTime)))
+                                          StatCalculator.CanPickupSidearmInstance((ThingWithComps) weapon, pawn.Pawn, out _)))
+                                     .OrderByDescending(thing => rule.GetThingScore(thing, _updateTime)))
                             {
                                 pawn.AssignedWeapons.Add(weapon, "ranged sidearm");
                                 if (carriedWeapons.Contains(weapon) &&
@@ -573,6 +593,7 @@ namespace EquipmentManager
                                 UpdateAmmo(pawn, weapon, rule);
                             }
                             break;
+
                         default:
                             throw new ArgumentOutOfRangeException();
                     }
@@ -582,11 +603,15 @@ namespace EquipmentManager
 
         private void UpdateTools()
         {
+            if (_pawnCache == null) { return; }
+
             foreach (var pawn in _pawnCache.Where(pc => pc.ShouldUpdateEquipment))
             {
-                if (pawn.AssignedLoadout.ToolRuleId == null) { continue; }
+                if (pawn.AssignedLoadout?.ToolRuleId == null) { continue; }
+
                 var rule = EquipmentManager.GetToolRule((int) pawn.AssignedLoadout.ToolRuleId);
                 if (rule == null) { continue; }
+
                 switch (rule.EquipMode)
                 {
                     case ItemRule.ToolEquipMode.OneForEveryWorkType:
